@@ -6,28 +6,29 @@ from sklearn.svm import SVC
 from sklearn.preprocessing import LabelEncoder
 from faceDetection import face_detection
 
-# Safe PCA function to handle edge cases and ensure it's computed once
 def safe_pca(data, n_components):
-    print("[PCA] Starting PCA...")
-    data = np.array(data)
-    if len(data.shape) != 2:
-        raise ValueError(f"Data should be a 2D array, but got shape {data.shape}")
-
-    print("[PCA] Calculating mean and centering data...")
     mean = np.mean(data, axis=0)
     centered = data - mean
 
+    # Handle small sample case properly
     if centered.shape[0] < centered.shape[1]:
         print("[PCA] Using dual covariance trick (n_samples < n_features)...")
+        # Compute XXᵀ instead of XᵀX
         cov = np.dot(centered, centered.T) / centered.shape[0]
         eigs, eigvecs = np.linalg.eigh(cov)
+
+        # Convert to XᵀX eigenvectors (may contain zeros)
         eigvecs = np.dot(centered.T, eigvecs)
+
+        # Filter out zero vectors and normalize
         valid_indices = []
         for i in range(eigvecs.shape[1]):
             norm = np.linalg.norm(eigvecs[:, i])
             if norm > 1e-10:
                 eigvecs[:, i] /= norm
                 valid_indices.append(i)
+
+        # Keep only non-zero eigenvectors
         eigvecs = eigvecs[:, valid_indices]
         eigs = eigs[valid_indices]
     else:
@@ -35,13 +36,15 @@ def safe_pca(data, n_components):
         cov = np.dot(centered.T, centered) / centered.shape[0]
         eigs, eigvecs = np.linalg.eigh(cov)
 
+
+    # Sort descending
     print("[PCA] Sorting eigenvalues and eigenvectors...")
     idx = np.argsort(eigs)[::-1]
     eigs = eigs[idx]
     eigvecs = eigvecs[:, idx]
 
     print("[PCA] PCA complete.")
-    return eigs[:n_components], eigvecs[:, :n_components], mean
+    return eigvecs[:, :n_components].T, eigs[:n_components], mean
 
 
 class EigenFaceRecognition:
@@ -54,7 +57,7 @@ class EigenFaceRecognition:
         self.eigvecs = None
         self.mean = None
         self.le = LabelEncoder()
-        self.is_trained = False  # Track if the model has been trained
+        self.is_trained = False  
 
     def load_images_and_labels(self):
         print("[Load] Gathering image paths...")
@@ -107,7 +110,8 @@ class EigenFaceRecognition:
         print("[Train] Projecting training images into eigenspace...")
         self.eigvecs = eigvecs
         self.mean = mean
-        self.projected_images = np.dot(images - mean, eigvecs)
+        self.projected_images = np.dot(images - mean, eigvecs.T)
+
 
         print("[Train] Training SVM classifier...")
         self.classifier = SVC(kernel='rbf', probability=True)

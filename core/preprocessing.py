@@ -72,3 +72,4 @@ y_pred = clf.predict(X_test_pca)
 print("Classification Report:")
 print(classification_report(y_test, y_pred))
 print(f"Accuracy: {accuracy_score(y_test, y_pred):.2f}")
+

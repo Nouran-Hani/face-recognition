@@ -3,7 +3,10 @@ import numpy as np
 
 def face_detection(image):
     
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    if len(image.shape) == 3: 
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image 
     
     # Skin color detection (for color images)
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -49,7 +52,7 @@ def face_detection(image):
     return faces
 
 def validate_face_region(face_roi):
-   
+
     eyes = detect_eyes(face_roi)
     return len(eyes) >= 1  # At least one eye detected
 
