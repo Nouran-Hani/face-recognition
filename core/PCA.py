@@ -12,8 +12,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import cross_val_predict
-
-
+from sklearn.ensemble import VotingClassifier
 
 
 def safe_pca(data, n_components):
@@ -133,18 +132,27 @@ class EigenFaceRecognition:
         aug_images = []
         # Horizontal flip
         flipped = cv2.flip(img, 1)
-        aug_images.append(flipped)
+        flipped_resized = cv2.resize(flipped, self.image_size)  # Resize to (100, 100)
+        aug_images.append(flipped_resized)
 
         # Slight rotation
         M = cv2.getRotationMatrix2D((img.shape[1] // 2, img.shape[0] // 2), angle=10, scale=1)
         rotated = cv2.warpAffine(img, M, (img.shape[1], img.shape[0]))
-        aug_images.append(rotated)
+        rotated_resized = cv2.resize(rotated, self.image_size)  # Resize to (100, 100)
+        aug_images.append(rotated_resized)
 
         # Brightness increase
         bright = cv2.convertScaleAbs(img, alpha=1.2, beta=30)
-        aug_images.append(bright)
+        bright_resized = cv2.resize(bright, self.image_size)  # Resize to (100, 100)
+        aug_images.append(bright_resized)
+
+        # Scaling (zooming)
+        scaled = cv2.resize(img, None, fx=1.1, fy=1.1)
+        scaled_resized = cv2.resize(scaled, self.image_size)  # Resize to (100, 100)
+        aug_images.append(scaled_resized)
 
         return aug_images
+
 
     def train_classifier(self):
         # Load the images and labels
@@ -156,19 +164,28 @@ class EigenFaceRecognition:
 
         # Perform PCA on the loaded images
         print("[Train] Performing PCA...")
-        eigvecs, eigvals, mean = safe_pca(images, n_components=75)
+        eigvecs, eigvals, mean = safe_pca(images, n_components=150)
 
         # Project the images into the PCA space
         X_train_pca = np.dot(images - mean, eigvecs.T)
 
-        # Split the data into training and test sets
         
         # Train the SVM classifier
         print("[Train] Training the SVM classifier...")
-        clf = SVC(kernel='linear', C=10, class_weight='balanced')
+        clf = SVC(kernel='linear', C=1, class_weight='balanced')
         clf.fit(X_train_pca, labels)
         scores = cross_val_score(clf, X_train_pca, labels, cv=5)
 
+        # print("[Train] Training the SVM and KNN classifiers...")
+        # # Initialize the classifiers
+        # svm_clf = SVC(kernel='linear', C=1, class_weight='balanced')
+        # knn_clf = KNeighborsClassifier(n_neighbors=3)
+        # # Create the VotingClassifier (Hard voting)
+        # clf = VotingClassifier(estimators=[('svm', svm_clf), ('knn', knn_clf)], voting='hard')
+        # # Train the classifier
+        # clf.fit(X_train_pca, labels)
+        # # Perform cross-validation and get the accuracy scores
+        # scores = cross_val_score(clf, X_train_pca, labels, cv=5)
 
         y_pred = cross_val_predict(clf, X_train_pca, labels, cv=5)
         print("[Train] Classification Report:")
