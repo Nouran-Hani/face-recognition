@@ -173,7 +173,7 @@ class EigenFaceRecognition:
         # Train the SVM classifier
         print("[Train] Training the SVM classifier...")
         clf = SVC(kernel='linear', C=1, class_weight='balanced')
-        clf.fit(X_train_pca, labels)
+        clf.fit(X_train_pca,  self.le.transform(labels))
         scores = cross_val_score(clf, X_train_pca, labels, cv=5)
 
         # print("[Train] Training the SVM and KNN classifiers...")
