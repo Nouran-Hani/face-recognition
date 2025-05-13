@@ -7,6 +7,8 @@ from sklearn.preprocessing import LabelEncoder
 from faceDetection import face_detection
 from collections import Counter
 from sklearn.model_selection import train_test_split
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import classification_report, confusion_matrix
 
 
 def safe_pca(data, n_components):
@@ -119,19 +121,23 @@ class EigenFaceRecognition:
 
         # Perform PCA on the loaded images
         print("[Train] Performing PCA...")
-        eigvecs, eigvals, mean = safe_pca(images, n_components=50)
+        eigvecs, eigvals, mean = safe_pca(images, n_components=75)
 
         # Project the images into the PCA space
         X_train_pca = np.dot(images - mean, eigvecs.T)
 
         # Split the data into training and test sets
-        X_train, X_test, y_train, y_test = train_test_split(X_train_pca, labels, test_size=0.2, random_state=42, stratify=labels)
+        X_train, X_test, y_train, y_test = train_test_split(X_train_pca, labels, test_size=0.25, random_state=42, stratify=labels)
 
         # Train the SVM classifier
         print("[Train] Training the SVM classifier...")
-        clf = SVC(kernel='linear', class_weight='balanced')
+        clf = SVC(kernel='linear', C=50, class_weight='balanced')
         clf.fit(X_train, y_train)
 
+        # print("[Train] Training the k-NN classifier...")
+        # clf = KNeighborsClassifier(n_neighbors=8)
+        # clf.fit(X_train, y_train)
+        
         # Store the classifier, PCA components, and mean
         self.classifier = clf
         self.eigvecs = eigvecs
@@ -141,6 +147,12 @@ class EigenFaceRecognition:
 
         # Evaluate the classifier
         print("[Train] Evaluating the classifier...")
+        y_pred = clf.predict(X_test)
+        print("[Train] Classification Report:")
+        print(classification_report(y_test, y_pred))
+
+        # print("[Train] Confusion Matrix:")
+        # print(confusion_matrix(y_test, y_pred))
         accuracy = clf.score(X_test, y_test)
         print(f"[Train] Classification accuracy: {accuracy:.2f}")
 
@@ -170,7 +182,8 @@ class EigenFaceRecognition:
         img_flat = img_resized.flatten()
 
         # Project the image into the PCA space
-        img_projected = np.dot(img_flat - self.mean, self.eigvecs)
+        img_projected = np.dot(img_flat - self.mean, self.eigvecs.T)
+
         img_projected = img_projected.reshape(1, -1)
 
         # Predict the label of the image using the trained classifier
@@ -183,8 +196,8 @@ class EigenFaceRecognition:
 
 
 if __name__ == "__main__":
-    dataset_path = r"data_uncropped"
-    test_image_path = r"data_uncropped/Aaron_Guiel/Aaron_Guiel_0001.jpg"
+    dataset_path = r"CV/face-recognition/subjects"
+    test_image_path = r"CV/face-recognition/subjects/Aaron_Peirsol/Aaron_Peirsol_0001.jpg"
 
     print("[Main] Initializing EigenFaceRecognition...")
     eigen_face = EigenFaceRecognition(image_dir=dataset_path, image_size=(100, 100))
@@ -193,7 +206,7 @@ if __name__ == "__main__":
     eigen_face.train_classifier()
 
     print("[Main] Loading test image...")
-    test_image = cv2.imread(test_image_path, cv2.IMREAD_GRAYSCALE)
+    test_image = cv2.imread(test_image_path, cv2.IMREAD_COLOR)
     if test_image is None:
         print(f"[Main] Failed to load test image: {test_image_path}")
     else:
