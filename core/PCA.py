@@ -2,6 +2,7 @@ import os
 import cv2
 import numpy as np
 import glob
+from sklearn.svm import LinearSVC
 from sklearn.svm import SVC
 from sklearn.preprocessing import LabelEncoder
 from faceDetection import face_detection
@@ -9,6 +10,10 @@ from collections import Counter
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_predict
+
+
 
 
 def safe_pca(data, n_components):
@@ -81,6 +86,7 @@ class EigenFaceRecognition:
             if img is None:
                 print(f"Failed to load {path}")
                 continue
+            # img = self.normalize_image(img) 
             img = cv2.resize(img, image_size)
             images.append(img.flatten())
             
@@ -88,6 +94,11 @@ class EigenFaceRecognition:
             base = os.path.basename(path)
             name = "_".join(base.split('_')[:2])  # e.g., 'Aaron_Eckhart'
             labels.append(name)
+
+            # data augmentation
+            for aug in self.augment_image(img):
+                images.append(aug.flatten())
+                labels.append(name)
 
         images = np.array(images)
         labels = np.array(labels)
@@ -110,6 +121,28 @@ class EigenFaceRecognition:
         labels = np.array(filtered_labels)
 
         return images, labels
+    
+    def normalize_image(self, img):
+        img_yuv = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
+        img_yuv[:, :, 0] = cv2.equalizeHist(img_yuv[:, :, 0])
+        return cv2.cvtColor(img_yuv, cv2.COLOR_YUV2BGR)
+
+    def augment_image(self, img):
+        aug_images = []
+        # Horizontal flip
+        flipped = cv2.flip(img, 1)
+        aug_images.append(flipped)
+
+        # Slight rotation
+        M = cv2.getRotationMatrix2D((img.shape[1] // 2, img.shape[0] // 2), angle=10, scale=1)
+        rotated = cv2.warpAffine(img, M, (img.shape[1], img.shape[0]))
+        aug_images.append(rotated)
+
+        # Brightness increase
+        bright = cv2.convertScaleAbs(img, alpha=1.2, beta=30)
+        aug_images.append(bright)
+
+        return aug_images
 
     def train_classifier(self):
         # Load the images and labels
@@ -127,12 +160,21 @@ class EigenFaceRecognition:
         X_train_pca = np.dot(images - mean, eigvecs.T)
 
         # Split the data into training and test sets
-        X_train, X_test, y_train, y_test = train_test_split(X_train_pca, labels, test_size=0.25, random_state=42, stratify=labels)
-
+        
         # Train the SVM classifier
         print("[Train] Training the SVM classifier...")
-        clf = SVC(kernel='linear', C=50, class_weight='balanced')
-        clf.fit(X_train, y_train)
+        clf = SVC(kernel='linear', C=10, class_weight='balanced')
+        clf.fit(X_train_pca, labels)
+        scores = cross_val_score(clf, X_train_pca, labels, cv=5)
+
+
+        y_pred = cross_val_predict(clf, X_train_pca, labels, cv=5)
+        print("[Train] Classification Report:")
+        print(classification_report(labels, y_pred))
+        print(f"[Train] Cross-validated accuracy: {np.mean(scores):.2f}")
+
+
+        # clf.fit(X_train, y_train)
 
         # print("[Train] Training the k-NN classifier...")
         # clf = KNeighborsClassifier(n_neighbors=8)
@@ -145,16 +187,16 @@ class EigenFaceRecognition:
         self.le.fit(labels)
         self.is_trained = True
 
-        # Evaluate the classifier
-        print("[Train] Evaluating the classifier...")
-        y_pred = clf.predict(X_test)
-        print("[Train] Classification Report:")
-        print(classification_report(y_test, y_pred))
+        # # Evaluate the classifier
+        # print("[Train] Evaluating the classifier...")
+        # y_pred = clf.predict(X_test)
+        # print("[Train] Classification Report:")
+        # print(classification_report(y_test, y_pred))
 
-        # print("[Train] Confusion Matrix:")
-        # print(confusion_matrix(y_test, y_pred))
-        accuracy = clf.score(X_test, y_test)
-        print(f"[Train] Classification accuracy: {accuracy:.2f}")
+        # # print("[Train] Confusion Matrix:")
+        # # print(confusion_matrix(y_test, y_pred))
+        # accuracy = clf.score(X_test, y_test)
+        # print(f"[Train] Classification accuracy: {accuracy:.2f}")
 
         print("[Train] Training complete.")
 
@@ -178,6 +220,7 @@ class EigenFaceRecognition:
         face_crop = test_image[y:y+h, x:x+w]
 
         # Resize and flatten the face
+        # img_resized = self.normalize_image(img_resized) 
         img_resized = cv2.resize(face_crop, self.image_size)
         img_flat = img_resized.flatten()
 
