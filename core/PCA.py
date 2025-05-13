@@ -5,6 +5,9 @@ import glob
 from sklearn.svm import SVC
 from sklearn.preprocessing import LabelEncoder
 from faceDetection import face_detection
+from collections import Counter
+from sklearn.model_selection import train_test_split
+
 
 def safe_pca(data, n_components):
     mean = np.mean(data, axis=0)
@@ -60,6 +63,8 @@ class EigenFaceRecognition:
         self.is_trained = False  
 
     def load_images_and_labels(self):
+        image_size = (100, 100)  # resize all images to same size
+        n_components = 100 
         print("[Load] Gathering image paths...")
         image_paths = glob.glob(os.path.join(self.image_dir, '*', '*.jpg'))
         if not image_paths:
@@ -70,55 +75,78 @@ class EigenFaceRecognition:
         labels = []
 
         for path in image_paths:
-            img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+            img = cv2.imread(path, cv2.IMREAD_COLOR)
             if img is None:
-                print(f"[Load] Failed to load {path}")
+                print(f"Failed to load {path}")
                 continue
-            img = cv2.resize(img, self.image_size)
+            img = cv2.resize(img, image_size)
             images.append(img.flatten())
-            label = os.path.basename(os.path.dirname(path))
-            labels.append(label)
+            
+            # Extract label from filename
+            base = os.path.basename(path)
+            name = "_".join(base.split('_')[:2])  # e.g., 'Aaron_Eckhart'
+            labels.append(name)
 
         images = np.array(images)
         labels = np.array(labels)
 
-        if images.size == 0:
-            print("[Load] No valid images loaded.")
-            return np.array([]), np.array([])
+        print(f"Loaded {len(images)} images with shape {images.shape}")
 
-        print(f"[Load] Loaded {len(images)} images with {len(np.unique(labels))} unique labels.")
+        # Count occurrences
+        label_counts = Counter(labels)
+        valid_labels = {label for label, count in label_counts.items() if count >= 2}
+
+        # Filter images and labels
+        filtered_images = []
+        filtered_labels = []
+        for img, label in zip(images, labels):
+            if label in valid_labels:
+                filtered_images.append(img)
+                filtered_labels.append(label)
+
+        images = np.array(filtered_images)
+        labels = np.array(filtered_labels)
+
         return images, labels
 
     def train_classifier(self):
-        if self.is_trained:
-            print("[Train] Classifier is already trained. Skipping training.")
-            return
-
-        print("[Train] Starting training process...")
+        # Load the images and labels
         images, labels = self.load_images_and_labels()
 
         if images.size == 0:
             print("[Train] No images to train the classifier.")
             return
 
-        print("[Train] Encoding labels...")
-        labels_encoded = self.le.fit_transform(labels)
-
+        # Perform PCA on the loaded images
         print("[Train] Performing PCA...")
-        eigvals, eigvecs, mean = safe_pca(images, n_components=50)
+        eigvecs, eigvals, mean = safe_pca(images, n_components=50)
 
-        print("[Train] Projecting training images into eigenspace...")
+        # Project the images into the PCA space
+        X_train_pca = np.dot(images - mean, eigvecs.T)
+
+        # Split the data into training and test sets
+        X_train, X_test, y_train, y_test = train_test_split(X_train_pca, labels, test_size=0.2, random_state=42, stratify=labels)
+
+        # Train the SVM classifier
+        print("[Train] Training the SVM classifier...")
+        clf = SVC(kernel='linear', class_weight='balanced')
+        clf.fit(X_train, y_train)
+
+        # Store the classifier, PCA components, and mean
+        self.classifier = clf
         self.eigvecs = eigvecs
         self.mean = mean
-        self.projected_images = np.dot(images - mean, eigvecs.T)
+        self.le.fit(labels)
+        self.is_trained = True
 
+        # Evaluate the classifier
+        print("[Train] Evaluating the classifier...")
+        accuracy = clf.score(X_test, y_test)
+        print(f"[Train] Classification accuracy: {accuracy:.2f}")
 
-        print("[Train] Training SVM classifier...")
-        self.classifier = SVC(kernel='rbf', probability=True)
-        self.classifier.fit(self.projected_images, labels_encoded)
-
-        self.is_trained = True  # Mark model as trained
         print("[Train] Training complete.")
+
+
 
     def recognize_face(self, test_image):
         if not self.is_trained:
@@ -127,25 +155,32 @@ class EigenFaceRecognition:
 
         print("[Recognize] Preprocessing test image...")
 
+        # Detect faces in the test image
         faces = face_detection(test_image)
         if not faces:
             print("[Recognize] No face detected in the image.")
             return None
 
-        # Use the first detected face (you can enhance this to select among multiple faces if necessary)
+        # Use the first detected face (you can improve this by selecting among multiple faces if needed)
         x, y, w, h = faces[0]
         face_crop = test_image[y:y+h, x:x+w]
 
+        # Resize and flatten the face
         img_resized = cv2.resize(face_crop, self.image_size)
         img_flat = img_resized.flatten()
+
+        # Project the image into the PCA space
         img_projected = np.dot(img_flat - self.mean, self.eigvecs)
         img_projected = img_projected.reshape(1, -1)
 
+        # Predict the label of the image using the trained classifier
         print("[Recognize] Predicting label...")
         prediction = self.classifier.predict(img_projected)
         label = self.le.inverse_transform(prediction)
+
         print("[Recognize] Prediction complete.")
         return label[0]
+
 
 if __name__ == "__main__":
     dataset_path = r"data_uncropped"
