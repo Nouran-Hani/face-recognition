@@ -86,7 +86,7 @@ class EigenFaceRecognition:
             if img is None:
                 print(f"Failed to load {path}")
                 continue
-            # img = self.normalize_image(img) 
+            img = self.normalize_image(img) 
             img = cv2.resize(img, image_size)
             images.append(img.flatten())
             
@@ -119,6 +119,8 @@ class EigenFaceRecognition:
 
         images = np.array(filtered_images)
         labels = np.array(filtered_labels)
+
+        self.le.fit(labels)
 
         return images, labels
     
@@ -184,7 +186,6 @@ class EigenFaceRecognition:
         self.classifier = clf
         self.eigvecs = eigvecs
         self.mean = mean
-        self.le.fit(labels)
         self.is_trained = True
 
         # # Evaluate the classifier
@@ -220,8 +221,8 @@ class EigenFaceRecognition:
         face_crop = test_image[y:y+h, x:x+w]
 
         # Resize and flatten the face
-        # img_resized = self.normalize_image(img_resized) 
         img_resized = cv2.resize(face_crop, self.image_size)
+        img_resized = self.normalize_image(img_resized)
         img_flat = img_resized.flatten()
 
         # Project the image into the PCA space
@@ -240,7 +241,7 @@ class EigenFaceRecognition:
 
 if __name__ == "__main__":
     dataset_path = r"CV/face-recognition/subjects"
-    test_image_path = r"CV/face-recognition/subjects/Aaron_Peirsol/Aaron_Peirsol_0001.jpg"
+    test_image_path = r"CV/face-recognition/subjects/Martha_Stewart/Martha_Stewart_0001.jpg"
 
     print("[Main] Initializing EigenFaceRecognition...")
     eigen_face = EigenFaceRecognition(image_dir=dataset_path, image_size=(100, 100))
