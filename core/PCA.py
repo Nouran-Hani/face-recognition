@@ -2,13 +2,13 @@ import os
 import cv2
 import numpy as np
 import glob
-from sklearn.svm import LinearSVC
+import joblib 
 from sklearn.svm import SVC
 from sklearn.preprocessing import LabelEncoder
 from faceDetection import face_detection
 from collections import Counter
 from sklearn.model_selection import train_test_split
-from sklearn.neighbors import KNeighborsClassifier
+from joblib import load
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import cross_val_predict
@@ -176,17 +176,6 @@ class EigenFaceRecognition:
         clf.fit(X_train_pca,  self.le.transform(labels))
         scores = cross_val_score(clf, X_train_pca, labels, cv=5)
 
-        # print("[Train] Training the SVM and KNN classifiers...")
-        # # Initialize the classifiers
-        # svm_clf = SVC(kernel='linear', C=1, class_weight='balanced')
-        # knn_clf = KNeighborsClassifier(n_neighbors=3)
-        # # Create the VotingClassifier (Hard voting)
-        # clf = VotingClassifier(estimators=[('svm', svm_clf), ('knn', knn_clf)], voting='hard')
-        # # Train the classifier
-        # clf.fit(X_train_pca, labels)
-        # # Perform cross-validation and get the accuracy scores
-        # scores = cross_val_score(clf, X_train_pca, labels, cv=5)
-
         y_pred = cross_val_predict(clf, X_train_pca, labels, cv=5)
         print("[Train] Classification Report:")
         print(classification_report(labels, y_pred))
@@ -205,21 +194,10 @@ class EigenFaceRecognition:
         self.mean = mean
         self.is_trained = True
 
-        # # Evaluate the classifier
-        # print("[Train] Evaluating the classifier...")
-        # y_pred = clf.predict(X_test)
-        # print("[Train] Classification Report:")
-        # print(classification_report(y_test, y_pred))
-
-        # # print("[Train] Confusion Matrix:")
-        # # print(confusion_matrix(y_test, y_pred))
-        # accuracy = clf.score(X_test, y_test)
-        # print(f"[Train] Classification accuracy: {accuracy:.2f}")
-
         print("[Train] Training complete.")
 
-
-
+        self.save_model()
+    
     def recognize_face(self, test_image):
         if not self.is_trained:
             print("[Recognize] Classifier has not been trained.")
@@ -255,29 +233,69 @@ class EigenFaceRecognition:
         print("[Recognize] Prediction complete.")
         return label[0]
 
+    def save_model(self):
+        dir = 'CV/face-recognition/core'
+        path = os.path.join(dir, "model.pkl")  # Ensure it's a file path
 
-if __name__ == "__main__":
-    dataset_path = r"CV/face-recognition/subjects"
-    test_image_path = r"CV/face-recognition/subjects/Martha_Stewart/Martha_Stewart_0001.jpg"
+        joblib.dump({
+            'classifier': self.classifier,
+            'eigvecs': self.eigvecs,
+            'mean': self.mean,
+            'label_encoder': self.le
+        }, path)
+        print(f"[Model] Model saved to: {path}")
 
-    print("[Main] Initializing EigenFaceRecognition...")
-    eigen_face = EigenFaceRecognition(image_dir=dataset_path, image_size=(100, 100))
+    def load_model(self):
+        dir = 'CV/face-recognition/core'
+        path = os.path.join(dir, "model.pkl")
 
-    print("[Main] Training classifier...")
-    eigen_face.train_classifier()
+        if not os.path.exists(path):
+            print(f"[Model] Model file not found in: {path}")
+            return
 
-    print("[Main] Loading test image...")
-    test_image = cv2.imread(test_image_path, cv2.IMREAD_COLOR)
-    if test_image is None:
-        print(f"[Main] Failed to load test image: {test_image_path}")
-    else:
-        print("[Main] Recognizing face...")
-        predicted_label = eigen_face.recognize_face(test_image)
-        if predicted_label:
-            print(f"[Main] Predicted label: {predicted_label}")
+        data = joblib.load(path)
+        self.classifier = data['classifier']
+        self.eigvecs = data['eigvecs']
+        self.mean = data['mean']
+        self.le = data['label_encoder']
+        self.is_trained = True
+        print(f"[Model] Model loaded from: {path}")
 
-            color_image = cv2.imread(test_image_path)
-            cv2.putText(color_image, predicted_label, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            cv2.imshow("Predicted Face", color_image)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
+    def predict_from_image_path(self, image_path):
+        if not self.is_trained:
+            print("[Predict] Model not loaded or trained.")
+            return None
+
+        test_image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+        if test_image is None:
+            print(f"[Predict] Failed to load image: {image_path}")
+            return None
+
+        print("[Predict] Recognizing face from image path...")
+        return self.recognize_face(test_image)
+
+# if __name__ == "__main__":
+#     dataset_path = r"CV/face-recognition/subjects"
+#     test_image_path = r"CV/face-recognition/subjects/Jodie_Foster/Jodie_Foster_0001.jpg"
+
+#     print("[Main] Initializing EigenFaceRecognition...")
+#     eigen_face = EigenFaceRecognition(image_dir=dataset_path, image_size=(100, 100))
+
+#     print("[Main] Training classifier...")
+#     eigen_face.train_classifier()
+
+#     print("[Main] Loading test image...")
+#     test_image = cv2.imread(test_image_path, cv2.IMREAD_COLOR)
+#     if test_image is None:
+#         print(f"[Main] Failed to load test image: {test_image_path}")
+#     else:
+#         print("[Main] Recognizing face...")
+#         predicted_label = eigen_face.recognize_face(test_image)
+#         if predicted_label:
+#             print(f"[Main] Predicted label: {predicted_label}")
+
+#             color_image = cv2.imread(test_image_path)
+#             cv2.putText(color_image, predicted_label, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+#             cv2.imshow("Predicted Face", color_image)
+#             cv2.waitKey(0)
+#             cv2.destroyAllWindows()
