@@ -5,7 +5,7 @@ import glob
 import joblib 
 from sklearn.svm import SVC
 from sklearn.preprocessing import LabelEncoder
-from faceDetection import face_detection
+from core.faceDetection import face_detection
 from collections import Counter
 from sklearn.model_selection import train_test_split
 from joblib import load
@@ -246,8 +246,9 @@ class EigenFaceRecognition:
         print(f"[Model] Model saved to: {path}")
 
     def load_model(self):
-        dir = 'CV/face-recognition/core'
+        dir = ''
         path = os.path.join(dir, "model.pkl")
+        path = "core/model.pkl"
 
         if not os.path.exists(path):
             print(f"[Model] Model file not found in: {path}")
@@ -261,12 +262,12 @@ class EigenFaceRecognition:
         self.is_trained = True
         print(f"[Model] Model loaded from: {path}")
 
-    def predict_from_image_path(self, image_path):
+    def predict_from_image_path(self, image):
         if not self.is_trained:
             print("[Predict] Model not loaded or trained.")
             return None
 
-        test_image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+        test_image = image
         if test_image is None:
             print(f"[Predict] Failed to load image: {image_path}")
             return None

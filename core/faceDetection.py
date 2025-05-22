@@ -23,7 +23,7 @@ def face_detection(image):
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
     processed = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, kernel)
     processed = cv2.morphologyEx(processed, cv2.MORPH_OPEN, kernel)
-    
+
     # Find contours
     contours, _ = cv2.findContours(processed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
