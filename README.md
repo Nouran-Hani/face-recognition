@@ -60,10 +60,7 @@ This tool serves as a foundational platform for tasks in:
 - True Positive Rate vs False Positive Rate visualization
 - AUC metric calculation
 
-**ROC Analysis:**
-<div align="center">
-  <img src="media/roc.png" width="60%">
-</div>
+
 
 ### 🔄 Workflow Integration
 - Image preprocessing (histogram equalization)
